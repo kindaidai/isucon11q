@@ -16,10 +16,12 @@ services:
       context: .
     volumes:
       - .:/go/src/app
-#   env_file: ./etc/dev/.env
+    working_dir: /go/src/app/go
+    environment:
+      POST_ISUCONDITION_TARGET_BASE_URL: localhost
     depends_on: 
       - db
-    command: reflex -r '(\.go\z|go\.mod\z)' -s -- sh -c 'go run go/main.go'
+    command: reflex -r '(\.go\z|go\.mod\z)' -s -- sh -c 'go run main.go'
 
   db:
     image: mysql:8.0.22
