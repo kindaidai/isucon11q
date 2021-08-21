@@ -24,10 +24,10 @@ services:
     command: reflex -r '(\.go\z|go\.mod\z)' -s -- sh -c 'go run main.go'
 
   db:
-    image: mysql:8.0.22
+    image: mariadb:10.3.31
     volumes:
       - ./etc/mysql:/var/lib/mysql
     restart: always
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: 'true'
-    command: --default-authentication-plugin=mysql_native_password
+#   command: --default-authentication-plugin=mysql_native_password
