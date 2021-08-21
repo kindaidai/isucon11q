@@ -336,22 +336,6 @@ func postInitialize(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	isuList := []Isu{}
-	err = db.Select(&isuList, "SELECT * FROM `isu`")
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	client := gowebdav.NewClient(webdavURL, webdavUser, webdavPassword)
-
-	for _, isu := range isuList {
-		imagePath := strings.Join([]string{isu.JIAIsuUUID, isu.JIAUserID, "image"}, "/")
-		if err := client.Write(imagePath, isu.Image, 0644); err != nil {
-			return err
-		}
-	}
-
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
 	})
@@ -606,8 +590,8 @@ func postIsu(c echo.Context) error {
 	defer tx.Rollback()
 
 	_, err = tx.Exec("INSERT INTO `isu`"+
-		"	(`jia_isu_uuid`, `name`, `jia_user_id`) VALUES (?, ?, ?)",
-		jiaIsuUUID, isuName, jiaUserID)
+		"	(`jia_isu_uuid`, `name`, `image`, `jia_user_id`) VALUES (?, ?, ?, ?)",
+		jiaIsuUUID, isuName, image, jiaUserID)
 	if err != nil {
 		mysqlErr, ok := err.(*mysql.MySQLError)
 
