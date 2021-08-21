@@ -24,6 +24,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
+	"github.com/studio-b12/gowebdav"
 )
 
 const (
@@ -50,6 +51,10 @@ var (
 	jiaJWTSigningKey *ecdsa.PublicKey
 
 	postIsuConditionTargetBaseURL string // JIAへのactivate時に登録する，ISUがconditionを送る先のURL
+
+	webdavURL      = "https://isucondition.t.isucon.dev/dav/"
+	webdavUser     = ""
+	webdavPassword = ""
 )
 
 type Config struct {
@@ -331,6 +336,22 @@ func postInitialize(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	isuList := []Isu{}
+	err = db.Select(&isuList, "SELECT * FROM `isu`")
+	if err != nil {
+		c.Logger().Errorf("db error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	client := gowebdav.NewClient(webdavURL, webdavUser, webdavPassword)
+
+	for _, isu := range isuList {
+		imagePath := strings.Join([]string{isu.JIAIsuUUID, isu.JIAUserID, "image"}, "/")
+		if err := client.Write(imagePath, isu.Image, 0644); err != nil {
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
+
 	return c.JSON(http.StatusOK, InitializeResponse{
 		Language: "go",
 	})
@@ -569,6 +590,14 @@ func postIsu(c echo.Context) error {
 		}
 	}
 
+	imagePath := strings.Join([]string{jiaIsuUUID, jiaUserID, "image"}, "/")
+
+	client := gowebdav.NewClient(webdavURL, webdavUser, webdavPassword)
+
+	if err := client.Write(imagePath, image, 0644); err != nil {
+		return err
+	}
+
 	tx, err := db.Beginx()
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
@@ -577,8 +606,8 @@ func postIsu(c echo.Context) error {
 	defer tx.Rollback()
 
 	_, err = tx.Exec("INSERT INTO `isu`"+
-		"	(`jia_isu_uuid`, `name`, `image`, `jia_user_id`) VALUES (?, ?, ?, ?)",
-		jiaIsuUUID, isuName, image, jiaUserID)
+		"	(`jia_isu_uuid`, `name`, `jia_user_id`) VALUES (?, ?, ?)",
+		jiaIsuUUID, isuName, jiaUserID)
 	if err != nil {
 		mysqlErr, ok := err.(*mysql.MySQLError)
 
@@ -700,16 +729,12 @@ func getIsuIcon(c echo.Context) error {
 
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
-	var image []byte
-	err = db.Get(&image, "SELECT `image` FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
-		jiaUserID, jiaIsuUUID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return c.String(http.StatusNotFound, "not found: isu")
-		}
+	imagePath := strings.Join([]string{jiaIsuUUID, jiaUserID, "image"}, "/")
 
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+	client := gowebdav.NewClient(webdavURL, webdavUser, webdavPassword)
+	image, err := client.Read(imagePath)
+	if err != nil {
+		return c.String(http.StatusNotFound, "not found: isu")
 	}
 
 	return c.Blob(http.StatusOK, "", image)
