@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx
+    volumes:
+      - ./etc/nginx:/etc/nginx
+    ports:
+      - 8080:80
+    depends_on:
+      - go
+
+  go:
+    build:
+      dockerfile: ./docker/go/Dockerfile
+      context: .
+    volumes:
+      - .:/go/src/app
+#   env_file: ./etc/dev/.env
+    depends_on: 
+      - db
+    command: reflex -r '(\.go\z|go\.mod\z)' -s -- sh -c 'go run go/main.go'
+
+  db:
+    image: mysql:8.0.22
+    volumes:
+      - ./etc/mysql:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'true'
+    command: --default-authentication-plugin=mysql_native_password
