@@ -48,7 +48,7 @@ const (
 
 var (
 	db                  *sqlx.DB
-	sessionStore        sessions.Store
+	sessionStore        *redisstore.RedisStore
 	mySQLConnectionData *MySQLConnectionEnv
 
 	jiaJWTSigningKey *ecdsa.PublicKey
@@ -206,6 +206,15 @@ func init() {
 	if err != nil {
 		log.Fatalf("failed to parse ECDSA public key: %v", err)
 	}
+
+  client := redis.NewClient(&redis.Options{
+    Addr: "192.168.0.13:6379",
+  })
+
+  sessionStore, err = redisstore.NewRedisStore(context.Background(), client)
+  if err != nil {
+    log.Fatal("failed to create redis store", err)
+  }
 }
 
 func connectRedis() *redisstore.RedisStore {
@@ -273,8 +282,7 @@ func main() {
 }
 
 func getSession(r *http.Request) (*sessions.Session, error) {
-	store := connectRedis()
-	session, err := store.Get(r, sessionName)
+	session, err := sessionStore.Get(r, sessionName)
 	if err != nil {
 		return nil, err
 	}
