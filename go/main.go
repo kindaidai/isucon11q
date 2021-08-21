@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"database/sql"
 	"encoding/json"
@@ -18,12 +19,15 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+        "github.com/go-redis/redis/v8"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
+        "github.com/rbcervilla/redisstore/v8"
+//	"github.com/studio-b12/gowebdav"
 )
 
 const (
@@ -194,8 +198,6 @@ func (mc *MySQLConnectionEnv) ConnectDB() (*sqlx.DB, error) {
 }
 
 func init() {
-	sessionStore = sessions.NewCookieStore([]byte(getEnv("SESSION_KEY", "isucondition")))
-
 	key, err := ioutil.ReadFile(jiaJWTSigningKeyPath)
 	if err != nil {
 		log.Fatalf("failed to read file: %v", err)
@@ -204,6 +206,19 @@ func init() {
 	if err != nil {
 		log.Fatalf("failed to parse ECDSA public key: %v", err)
 	}
+}
+
+func connectRedis() *redisstore.RedisStore {
+	client := redis.NewClient(&redis.Options{
+		Addr: "192.168.0.13:6379",
+	})
+
+	store, err := redisstore.NewRedisStore(context.Background(), client)
+	if err != nil {
+		log.Fatal("failed to create redis store", err)
+	}
+
+	return store
 }
 
 func main() {
@@ -258,7 +273,8 @@ func main() {
 }
 
 func getSession(r *http.Request) (*sessions.Session, error) {
-	session, err := sessionStore.Get(r, sessionName)
+	store := connectRedis()
+	session, err := store.Get(r, sessionName)
 	if err != nil {
 		return nil, err
 	}
